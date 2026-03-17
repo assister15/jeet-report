@@ -115,7 +115,8 @@ st.markdown("""
 
 def get_gsheet_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    return gspread.authorize(ServiceAccountCredentials.from_json_keyfile_name(resource_path("key.json"), scope))
+    # 수정 후
+    return gspread.authorize(ServiceAccountCredentials.from_json_keyfile_name(resource_path("google_key.json"), scope))
 
 def main():
     menu = st.sidebar.radio("📋 업무 선택", ["1. 성적 데이터 입력", "2. 분석 리포트 출력"])
