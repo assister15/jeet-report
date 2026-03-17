@@ -8,7 +8,6 @@ from datetime import datetime
 import os
 import base64
 import sys
-import streamlit.web.cli as stcli
 
 # 1. 경로 해결 및 페이지 설정 (A4 세로 최적화)
 def resource_path(relative_path):
@@ -24,6 +23,13 @@ def get_base64_image(image_path):
         with open(full_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     return ""
+
+# [수정 부분 1] 구글 시트 연결 (Secrets 방식 적용)
+def get_gsheet_client():
+    # Streamlit Cloud의 Secrets에 저장한 정보를 가져옵니다.
+    creds_dict = st.secrets["gcp_service_account"]
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    return gspread.authorize(ServiceAccountCredentials.from_json_dict(creds_dict, scope))
 
 UNIT_ORDER = {
     "중1-1": ["소인수분해", "정수와 유리수", "문자와 식", "좌표평면과 그래프"],
@@ -78,7 +84,6 @@ def get_expert_diagnosis(name, u_res, l_res, s_res, score):
     
     return diag
 
-# 🎨 스타일 설정 (표 형태의 정오표 스타일 추가)
 st.markdown("""
     <style>
     .main .block-container { max-width: 780px !important; padding-top: 1rem !important; }
@@ -87,24 +92,8 @@ st.markdown("""
     .header-bar { border-bottom: 4px solid #EE2C3C; margin-bottom: 15px; }
     .score-display { font-size: 55px !important; font-weight: 800 !important; color: black !important; line-height: 1; }
     .analysis-card { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 12px; padding: 25px; line-height: 1.8; font-size: 15px; text-align: justify; }
-    
-    /* 정오표 입력칸 스타일 */
-    .q-box {
-        border: 1px solid #dee2e6;
-        padding: 5px;
-        text-align: center;
-        border-radius: 5px;
-        background-color: #ffffff;
-        margin-bottom: 5px;
-    }
-    .q-label {
-        font-weight: bold;
-        border-bottom: 1px solid #eee;
-        margin-bottom: 5px;
-        display: block;
-        color: #EE2C3C !important;
-    }
-    
+    .q-box { border: 1px solid #dee2e6; padding: 5px; text-align: center; border-radius: 5px; background-color: #ffffff; margin-bottom: 5px; }
+    .q-label { font-weight: bold; border-bottom: 1px solid #eee; margin-bottom: 5px; display: block; color: #EE2C3C !important; }
     @media print {
         @page { size: A4 portrait; margin: 10mm; }
         .main .block-container { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
@@ -112,10 +101,6 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-
-def get_gsheet_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    return gspread.authorize(ServiceAccountCredentials.from_json_keyfile_name(resource_path("google_key.json"), scope))
 
 def main():
     menu = st.sidebar.radio("📋 업무 선택", ["1. 성적 데이터 입력", "2. 분석 리포트 출력"])
@@ -132,22 +117,20 @@ def main():
             
             st.markdown("#### 🖊️ 정오표 입력 (O, X 선택)")
             ans_list = []
-            # 7행 5열로 구성
             for r in range(7):
                 cols = st.columns(5)
                 for c in range(5):
                     idx = r * 5 + c + 1
                     with cols[c]:
-                        # 스타일이 적용된 div 안에 라디오 버튼 배치
                         st.markdown(f"""<div class='q-box'><span class='q-label'>{idx}번</span>""", unsafe_allow_html=True)
                         ans = st.radio(f"q_{idx}", ["O", "X"], horizontal=True, key=f"q_{idx}", label_visibility="collapsed")
                         st.markdown("</div>", unsafe_allow_html=True)
                         ans_list.append(ans)
             
-            # 버튼 명칭 '성적 입력하기'로 변경
             if st.form_submit_button("🚀 성적 입력하기"):
                 try:
                     client = get_gsheet_client()
+                    # 시트 이름 "성적표 입력"이 맞는지 꼭 확인하세요!
                     sheet = client.open("성적표 입력").get_worksheet(0)
                     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     sheet.insert_row([now, name, grade_lv, school, grade_nm, course, "".join(ans_list)], len(sheet.get_all_values())+1, value_input_option='RAW')
@@ -220,7 +203,4 @@ def main():
             except Exception as e: st.error(f"오류: {e}")
 
 if __name__ == "__main__":
-    if getattr(sys, 'frozen', False):
-        sys.argv = ["streamlit", "run", sys.executable, "--global.developmentMode=false", "--server.headless=true"]
-        sys.exit(stcli.main())
-    else: main()
+    main()
